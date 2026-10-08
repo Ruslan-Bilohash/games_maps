@@ -1,0 +1,396 @@
+<title>Двобій 3D · Duel 3D</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#07080b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Russo+One&family=Rubik:wght@400;500;700&display=swap">
+<style>
+/* Layout: full-screen 3D arena; health bars and timer across the top, touch controls in the bottom corners, menus as glassy centered panels */
+:root {
+  --bg: #07080b;
+  --panel: rgba(10, 12, 18, 0.78);
+  --line: rgba(255, 255, 255, 0.14);
+  --text: #f1f3f7;
+  --muted: #9aa3b5;
+  --blood: #e0322a;
+  --gold: #ffc23d;
+  --cyan: #52d6ff;
+  --display: "Russo One", "Oswald", sans-serif;
+  --cond: "Oswald", "Arial Narrow", sans-serif;
+  --ui: "Rubik", system-ui, sans-serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui);
+  overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; touch-action: none; overscroll-behavior: none;
+}
+#app { position: relative; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #1b1f2b, #07080b 70%); }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+button { font-family: var(--ui); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ---------- HUD ---------- */
+#hud { position: absolute; inset: 0; pointer-events: none; }
+.bars { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: start; }
+.side { display: grid; gap: 5px; }
+.side.r { justify-items: end; }
+.hp { width: 100%; height: 16px; position: relative; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.55); transform: skewX(-20deg); box-shadow: 0 0 18px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.6); overflow: hidden; }
+.side.r .hp { transform: skewX(20deg); }
+.hp i { position: absolute; top: 0; bottom: 0; left: 0; }
+.side.r .hp i { left: auto; right: 0; }
+.hp .trail { background: #ff5a3c; }
+.hp .fill { background: linear-gradient(to bottom, #fff3b0, #ffc23d 45%, #e08a0b); box-shadow: 0 0 12px rgba(255,194,61,0.7); }
+.hp.low .fill { background: linear-gradient(to bottom, #ffb1a6, #e0322a 50%, #8f1610); box-shadow: 0 0 12px rgba(224,50,42,0.8); }
+.name { font-family: var(--cond); font-weight: 700; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; text-shadow: 0 2px 6px #000; display: flex; gap: 8px; align-items: center; max-width: 100%; }
+.name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wins { display: flex; gap: 5px; }
+.wins b { width: 9px; height: 9px; transform: rotate(45deg); border: 1.5px solid rgba(255,255,255,0.7); background: transparent; }
+.wins b.on { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.timer { font-family: var(--display); font-size: 34px; line-height: 1; min-width: 2ch; text-align: center; color: #fff; text-shadow: 0 0 14px rgba(255,194,61,0.7), 0 3px 6px #000; font-variant-numeric: tabular-nums; }
+.mode { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 50px); left: 50%; transform: translateX(-50%); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.6); white-space: nowrap; text-shadow: 0 1px 4px #000; }
+
+/* ---------- Керування ---------- */
+#pad { position: absolute; inset: 0; pointer-events: none; }
+#stickZone { position: absolute; left: 0; bottom: 0; width: 46%; height: 62%; pointer-events: auto; touch-action: none; }
+.stick { position: absolute; width: 132px; height: 132px; margin: -66px 0 0 -66px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,255,255,0.05) 40%, rgba(255,255,255,0.12) 70%, rgba(255,255,255,0.02) 71%); border: 1.5px solid rgba(255,255,255,0.35);
+  box-shadow: 0 0 30px rgba(0,0,0,0.35), inset 0 0 24px rgba(255,255,255,0.06); transition: opacity 0.2s; }
+.stick.idle { opacity: 0.55; transition: left 0.15s, top 0.15s, opacity 0.2s; }
+.stick i { position: absolute; width: 0; height: 0; border: 7px solid transparent; opacity: 0.7; }
+.stick .u { left: 59px; top: 6px; border-bottom: 9px solid #fff; border-top: 0; }
+.stick .d { left: 59px; bottom: 6px; border-top: 9px solid #fff; border-bottom: 0; }
+.stick .l { top: 59px; left: 6px; border-right: 9px solid #fff; border-left: 0; }
+.stick .r { top: 59px; right: 6px; border-left: 9px solid #fff; border-right: 0; }
+.stick b { position: absolute; font: 700 9px var(--cond); letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.75); left: 0; right: 0; text-align: center; }
+.stick .tu { top: -16px; } .stick .td { bottom: -16px; }
+.knob { position: absolute; left: 38px; top: 38px; width: 56px; height: 56px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.75), rgba(255,194,61,0.55) 45%, rgba(200,100,10,0.45)); box-shadow: 0 0 22px rgba(255,194,61,0.45), 0 4px 10px rgba(0,0,0,0.5); }
+.acts { position: absolute; right: max(6px, env(safe-area-inset-right)); bottom: max(6px, env(safe-area-inset-bottom)); width: 262px; height: 262px; pointer-events: none; transform-origin: 100% 100%; }
+.k {
+  position: absolute; display: grid; place-items: center; align-content: center; gap: 1px; touch-action: none; pointer-events: auto; padding: 0;
+  border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.42); background: radial-gradient(circle at 50% 30%, rgba(255,255,255,0.14), rgba(10,12,18,0.55) 70%);
+  color: var(--text); font-family: var(--cond); font-weight: 700; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,0.35); transition: transform 0.06s;
+}
+.k svg { width: 26px; height: 26px; fill: currentColor; }
+.k.on { transform: scale(0.92); background: radial-gradient(circle, rgba(255,194,61,0.6), rgba(255,140,30,0.25)); border-color: var(--gold); box-shadow: 0 0 22px rgba(255,194,61,0.6); }
+.k.kp { width: 86px; height: 86px; right: 6px; bottom: 6px; font-size: 13px; border-color: rgba(255,255,255,0.6); }
+.k.kp svg { width: 32px; height: 32px; }
+.k.kk { width: 68px; height: 68px; right: 102px; bottom: 2px; }
+.k.kh { width: 68px; height: 68px; right: 14px; bottom: 102px; }
+.k.kb { width: 58px; height: 58px; right: 182px; bottom: 6px; border-color: rgba(160,200,255,0.55); }
+.k.kf { width: 60px; height: 60px; right: 96px; bottom: 84px; border-color: rgba(190,255,170,0.6); }
+.k.sp { width: 62px; height: 62px; right: 6px; bottom: 182px; border-color: var(--cyan); box-shadow: 0 0 14px rgba(82,214,255,0.35); }
+.k.su { width: 76px; height: 76px; right: 84px; bottom: 156px; border: 2px solid #ff6a3d; background: radial-gradient(circle at 50% 35%, rgba(255,120,60,0.5), rgba(120,10,10,0.6) 70%); font-size: 13px; }
+.k.su.ready { animation: ready 1.1s ease-in-out infinite; }
+@keyframes ready { 0%,100% { box-shadow: 0 0 14px rgba(255,90,40,0.6), 0 0 0 0 rgba(255,90,40,0.5); } 50% { box-shadow: 0 0 30px rgba(255,150,60,0.95), 0 0 0 10px rgba(255,90,40,0); } }
+.k.cd { opacity: 0.45; box-shadow: none; animation: none; }
+.k .ring { position: absolute; inset: -2px; border-radius: 50%; pointer-events: none; }
+.k small { font-size: 9px; opacity: 0.7; letter-spacing: 0.08em; }
+.pauseBtn { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 64px); transform: translateX(-50%); width: 40px; height: 32px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.35); color: #fff; pointer-events: auto; display: grid; place-items: center; cursor: pointer; }
+.pauseBtn svg { width: 14px; height: 14px; fill: currentColor; }
+@media (max-width: 400px) { .acts { transform: scale(0.86); } .stick { transform: scale(0.9); } }
+@media (max-height: 460px) { .acts { transform: scale(0.74); } .stick { transform: scale(0.82); } #stickZone { height: 75%; } }
+#speed { position: absolute; inset: -30%; pointer-events: none; opacity: 0.75; will-change: transform;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,0) 0deg 2.6deg, rgba(255,240,220,0.5) 2.6deg 3.1deg, rgba(255,255,255,0) 3.1deg 5.3deg, rgba(255,220,180,0.3) 5.3deg 5.6deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 22%, #000 48%); mask-image: radial-gradient(circle, transparent 22%, #000 48%);
+  animation: speed 0.12s steps(2) infinite; }
+@keyframes speed { from { transform: rotate(0deg) scale(1); } to { transform: rotate(2deg) scale(1.03); } }
+@media (prefers-reduced-motion: reduce) { #speed { display: none; } .k.su.ready { animation: none; } }
+
+/* ---------- Банери ---------- */
+#banner {
+  position: absolute; left: 0; right: 0; top: 30%; text-align: center; pointer-events: none;
+  font-family: var(--display); font-size: clamp(42px, 13vw, 110px); line-height: 1; color: #fff; text-transform: uppercase;
+  text-shadow: 0 0 40px rgba(255,90,40,0.9), 0 4px 0 #000, 0 0 2px #000;
+}
+#banner small { display: block; margin-top: 10px; font-family: var(--cond); font-size: clamp(14px, 4vw, 22px); letter-spacing: 0.3em; text-transform: uppercase; color: var(--gold); text-shadow: 0 2px 6px #000; }
+#banner.pop { animation: pop 0.5s cubic-bezier(.2,1.6,.4,1); }
+@keyframes pop { from { transform: scale(2.4); opacity: 0; filter: blur(8px); } to { transform: scale(1); opacity: 1; filter: blur(0); } }
+#superCut {
+  position: absolute; left: 0; right: 0; top: 18%; height: 96px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.75) 18%, rgba(0,0,0,0.75) 82%, transparent);
+  border-top: 1px solid rgba(255,194,61,0.6); border-bottom: 1px solid rgba(255,194,61,0.6);
+  display: grid; place-items: center; overflow: hidden;
+}
+#superCut span { font-family: var(--display); font-size: clamp(28px, 7.5vw, 60px); color: #fff; text-transform: uppercase; text-shadow: 0 0 24px #ff8a3d, 0 3px 0 #000; animation: slide 1s cubic-bezier(.1,.9,.2,1); white-space: nowrap; }
+@keyframes slide { from { transform: translateX(-70%) skewX(-20deg); opacity: 0; } to { transform: translateX(0) skewX(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #banner.pop, #superCut span { animation: none; } }
+
+/* ---------- Меню ---------- */
+.screen { position: absolute; inset: 0; display: grid; place-items: center; align-content: safe center; gap: 16px; padding: 16px; overflow-y: auto; touch-action: pan-y; }
+#title { background: linear-gradient(to bottom, rgba(7,8,11,0.55), rgba(7,8,11,0) 22%, rgba(7,8,11,0) 50%, rgba(7,8,11,0.85) 80%); align-content: space-between; padding-top: max(24px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+.logo { margin: 0; text-align: center; font-family: var(--display); font-weight: 400; line-height: 0.9; font-size: clamp(52px, 16vw, 112px); color: #fff; letter-spacing: 0.02em; text-transform: uppercase; text-shadow: 0 0 50px rgba(255,90,40,0.75), 0 6px 0 #000; }
+.logo small { display: block; margin-top: 10px; font-family: var(--cond); font-size: 0.2em; letter-spacing: 0.4em; color: var(--gold); text-shadow: 0 2px 8px #000; }
+.panel { width: min(100%, 440px); box-sizing: border-box; display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 24px 70px rgba(0,0,0,0.6); }
+.panel h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 24px; letter-spacing: 0.06em; text-transform: uppercase; text-align: center; }
+.panel p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text); text-align: center; }
+.panel .small { font-size: 12px; color: var(--muted); }
+.btn {
+  cursor: pointer; padding: 13px 16px; border: 1px solid rgba(255,255,255,0.22); border-radius: 10px; background: rgba(255,255,255,0.06); color: var(--text);
+  font-family: var(--cond); font-weight: 700; font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase;
+}
+.btn:active { transform: translateY(1px); }
+.btn.red { background: linear-gradient(135deg, #ff5a2c, #c4161c); border-color: #ff9a70; box-shadow: 0 8px 24px rgba(224,50,42,0.4); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; }
+input[type="text"] { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.4); color: var(--text); font: 500 16px var(--ui); user-select: text; -webkit-user-select: text; }
+label.small { display: block; text-align: left; font-size: 12px; color: var(--muted); margin-bottom: -6px; }
+.load { display: grid; gap: 6px; }
+.load .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.load .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold), #ff5a2c); transition: width 0.2s; }
+.roster { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.fc { cursor: pointer; display: grid; gap: 2px; padding: 0 0 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,0.35); color: var(--text); text-align: center; overflow: hidden; }
+.fc canvas, .fc .ph { width: 100%; aspect-ratio: 4 / 5; max-height: 150px; object-fit: cover; object-position: 50% 20%; display: block; background: radial-gradient(ellipse at 50% 40%, #2b3142, #0b0d12); }
+.fc b { font-family: var(--display); font-weight: 400; font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase; }
+.fc span { font-size: 11px; color: var(--muted); padding: 0 6px; line-height: 1.3; }
+.fc[aria-pressed="true"] { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold), 0 0 24px rgba(255,194,61,0.3); }
+.spin { width: 38px; height: 38px; margin: 6px auto; border: 3px solid rgba(255,255,255,0.12); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.moves { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; text-align: left; }
+.moves b { color: var(--gold); font-family: var(--cond); letter-spacing: 0.04em; }
+}
+#rotate { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; align-content: center; gap: 12px; padding: 24px; text-align: center; background: rgba(7,8,11,0.94); }
+#rotate svg { width: 84px; height: 84px; color: var(--gold); animation: rot 2s ease-in-out infinite; }
+@keyframes rot { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+#rotate b { font-family: var(--display); font-weight: 400; font-size: 22px; text-transform: uppercase; }
+#rotate span { color: var(--muted); font-size: 14px; }
+.qrbox { display: grid; place-items: center; }
+#qrCanvas { width: 232px; height: 232px; background: #fff; border-radius: 12px; padding: 10px; box-sizing: content-box; image-rendering: pixelated; }
+.code { font-family: var(--display); font-size: 40px !important; letter-spacing: 0.3em; color: var(--gold) !important; }
+@media (max-height: 460px) {
+  .screen { padding: 10px; }
+  .screen .panel { max-height: calc(100vh - 20px); overflow-y: auto; gap: 8px; padding: 12px 14px; }
+  .panel h2 { font-size: 18px; }
+  .btn { padding: 9px 12px; font-size: 15px; }
+  #title { grid-template-columns: 1fr minmax(300px, 400px); align-content: center; align-items: center; justify-items: center; gap: 12px; }
+  #title .hint { display: none; }
+  .logo { font-size: clamp(40px, 15vh, 80px); }
+  .roster { grid-template-columns: repeat(4, 1fr); }
+  .fc canvas, .fc .ph { max-height: 96px; }
+  .fc span { display: none; }
+  .panel { width: min(100%, 600px); }
+  #qr .panel { grid-template-columns: auto 1fr; align-items: center; width: min(100%, 620px); }
+  #qr .panel h2, #qr .panel .row { grid-column: 1 / -1; }
+  #qr .qrbox { grid-row: span 2; }
+  #qrCanvas { width: 140px; height: 140px; }
+  .code { font-size: 32px !important; }
+}
+.picks { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { cursor: pointer; padding: 5px 9px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--text); font: 500 12px var(--ui); }
+.chip[aria-pressed="true"] { border-color: var(--gold); background: rgba(255,194,61,0.18); color: #fff; }
+.storyp { width: min(100%, 520px); }
+#stPortrait { width: 150px; height: 188px; margin: 0 auto; display: block; border-radius: 12px; border: 1px solid var(--line); background: #0b0d12; }
+.storyp .sttext { display: grid; gap: 6px; }
+.storyp #stText { text-align: left; }
+@media (max-height: 460px) { .storyp { grid-template-columns: auto 1fr; width: min(100%, 680px); } .storyp #stStage, .storyp .row { grid-column: 1 / -1; } #stPortrait { width: 120px; height: 150px; } }
+#select .panel { width: min(100%, 680px); }
+@media (min-width: 620px) { .roster { grid-template-columns: repeat(4, 1fr); } .fc canvas, .fc .ph { max-height: 130px; } }
+.langs { position: relative; z-index: 6; display: flex; justify-content: center; }
+#title > .langs { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); }
+.lsel-btn { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 10px 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,0.55); color: var(--text); font: 600 13px var(--ui); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.lsel-btn:hover, .lsel-btn[aria-expanded="true"] { border-color: var(--gold); }
+.lsel-btn .car { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; opacity: 0.8; transition: transform 0.15s; }
+.lsel-btn[aria-expanded="true"] .car { transform: rotate(180deg); }
+.flag { width: 24px; height: 16px; flex: none; border-radius: 3px; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); display: block; }
+.lsel-menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 170px; margin: 0; padding: 5px; list-style: none; border: 1px solid var(--line); border-radius: 12px; background: rgba(12,10,12,0.96); box-shadow: 0 16px 40px rgba(0,0,0,0.6); }
+.lsel-menu[hidden] { display: none; }
+.lsel-menu li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--text); font: 500 14px var(--ui); white-space: nowrap; }
+.lsel-menu li:hover, .lsel-menu li:focus { background: rgba(255,194,61,0.14); outline: none; }
+.lsel-menu li[aria-selected="true"] { background: rgba(255,194,61,0.22); }
+.lsel-menu li[aria-selected="true"]::after { content: "✓"; margin-left: auto; color: var(--gold); font-weight: 700; }
+.langs.inline { display: grid; }
+.langs.inline .lsel-btn { justify-content: center; padding: 10px 12px; }
+.langs.inline .lsel-menu { position: static; margin-top: 6px; box-shadow: none; }
+.lform { display: grid; gap: 10px; }
+input[type="email"] { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.4); color: var(--text); font: 500 16px var(--ui); user-select: text; -webkit-user-select: text; }
+.acct { display: grid; gap: 6px; }
+#toast { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); max-width: calc(100% - 32px); width: max-content; padding: 9px 16px; border-radius: 10px; background: rgba(0,0,0,0.85); border: 1px solid var(--line); color: var(--text); font-size: 13px; text-align: center; pointer-events: none; }
+</style>
+
+<div id="app">
+  <canvas id="cv" aria-label="Arena"></canvas>
+
+  <div id="hud" hidden>
+    <div class="bars">
+      <div class="side l">
+        <div class="hp" id="hpL"><i class="trail" id="trL"></i><i class="fill" id="fiL"></i></div>
+        <div class="name"><span id="nmL"></span><div class="wins" id="wL"><b></b><b></b></div></div>
+      </div>
+      <div class="timer" id="timer">60</div>
+      <div class="side r">
+        <div class="hp" id="hpR"><i class="trail" id="trR"></i><i class="fill" id="fiR"></i></div>
+        <div class="name"><div class="wins" id="wR"><b></b><b></b></div><span id="nmR"></span></div>
+      </div>
+    </div>
+    <div class="mode" id="modeTxt"></div>
+  </div>
+
+  <div id="pad" hidden>
+    <div id="stickZone" aria-label="Joystick">
+      <div class="stick idle" id="stick"><i class="u"></i><i class="d"></i><i class="l"></i><i class="r"></i><b class="tu" data-i18n="pad.jump">Стрибок</b><b class="td" data-i18n="pad.block">Блок</b><div class="knob" id="knob"></div></div>
+    </div>
+    <div class="acts" id="acts">
+      <button class="k kp" data-k="p" type="button"><svg viewBox="0 0 24 24"><path d="M7 9h9a3 3 0 0 1 3 3v3a5 5 0 0 1-5 5h-3a5 5 0 0 1-5-5v-5a1 1 0 0 1 1-1zm1-5h2v4H8zm3-1h2v5h-2zm3 1h2v4h-2z"/></svg><span data-i18n="pad.p">Рука</span></button>
+      <button class="k kk" data-k="k" type="button"><svg viewBox="0 0 24 24"><path d="M9 3l3 1-1 7 7 3 3 4-2 2-5-3-6-2-2-6z"/></svg><span data-i18n="pad.k">Нога</span></button>
+      <button class="k kh" data-k="h" type="button"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg><span data-i18n="pad.h">Важкий</span></button>
+      <button class="k kb" data-k="block" type="button"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg><span data-i18n="pad.block">Блок</span></button>
+      <button class="k kf" data-k="f" type="button"><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1-7.4 5H2l3.5-4L9 9H6.7A6 6 0 1 0 12 6z"/></svg><span data-i18n="pad.f">Сальто</span></button>
+      <button class="k sp" data-k="s" type="button" id="kS"><span data-i18n="pad.s">Спец</span><span class="ring" id="rS"></span></button>
+      <button class="k su" data-k="u" type="button" id="kU"><span data-i18n="pad.u">Супер</span><span class="ring" id="rU"></span></button>
+    </div>
+    <button class="pauseBtn" data-k="menu" type="button" data-i18n-aria="pause.title" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg></button>
+  </div>
+
+  <div id="speed" hidden></div>
+  <div id="banner" hidden></div>
+  <div id="superCut" hidden><span id="superTxt"></span></div>
+
+  <section id="title" class="screen">
+    <h1 class="logo"><span data-i18n="doc.title">Двобій</span><small data-i18n="title.sub">3D-бій на двох</small></h1>
+    <div class="langs" id="langs"></div>
+    <div class="panel">
+      <div class="load" id="loadBox">
+        <p class="small" id="loadTxt" data-i18n="load.txt">Завантажуємо бійців і арени…</p>
+        <div class="bar"><i id="loadBar"></i></div>
+      </div>
+      <label class="small" for="nick" data-i18n="nick.label">Твоє ім’я в бою</label>
+      <input id="nick" type="text" maxlength="16" autocomplete="off" data-i18n-ph="nick.ph" placeholder="Сірко">
+      <div class="acct" id="acct" hidden><button class="btn" type="button" id="goLogin" data-i18n="login.btn">Увійти через email</button><p class="small" id="acctTxt" hidden></p></div>
+      <button class="btn red" type="button" id="goCamp" disabled data-i18n="btn.camp">Проходження</button>
+      <button class="btn" type="button" id="goOnline" disabled data-i18n="btn.online">Бій онлайн</button>
+      <div class="row"><button class="btn" type="button" id="goQr" disabled data-i18n="btn.qr">Бій за QR-кодом</button><button class="btn" type="button" id="goCode" disabled data-i18n="btn.code">Ввести код</button></div>
+      <div class="row"><button class="btn" type="button" id="goCpu" disabled data-i18n="btn.cpu">Проти комп’ютера</button><button class="btn" type="button" id="goLocal" disabled data-i18n="btn.local">Удвох тут</button></div>
+      <p class="small hint" data-i18n="hint"></p>
+    </div>
+  </section>
+
+  <section id="select" class="screen" hidden>
+    <div class="panel">
+      <h2 data-i18n="select.title">Обери бійця</h2>
+      <div class="roster" id="roster"></div>
+      <div class="picks" id="pickBox">
+        <span class="small" data-i18n="pick.arena">Арена</span><div class="chips" id="arenaPick"></div>
+        <span class="small" id="diffLbl" data-i18n="pick.diff">Складність</span><div class="chips" id="diffPick"></div>
+      </div>
+      <div class="moves" id="moveList"></div>
+      <div class="row"><button class="btn" type="button" id="selBack" data-i18n="btn.back">Назад</button><button class="btn red" type="button" id="selGo" data-i18n="btn.fight">До бою</button></div>
+    </div>
+  </section>
+
+  <section id="lobby" class="screen" hidden>
+    <div class="panel">
+      <h2 id="lobbyTitle">Шукаємо суперника</h2>
+      <div class="spin" id="lobbySpin"></div>
+      <p id="lobbyText">Чекаємо, поки ще хтось відкриє гру й натисне «Бій онлайн».</p>
+      <p class="small" id="lobbyCount"></p>
+      <div class="row"><button class="btn" type="button" id="lobbyCpu" data-i18n="lobby.cpu">Поки що з комп’ютером</button><button class="btn" type="button" id="lobbyBack" data-i18n="btn.cancel">Скасувати</button></div>
+    </div>
+  </section>
+
+  <section id="story" class="screen" hidden>
+    <div class="panel storyp">
+      <p class="small" id="stStage">Бій 1 з 7</p>
+      <canvas id="stPortrait" width="240" height="300" aria-hidden="true"></canvas>
+      <div class="sttext">
+        <h2 id="stTitle">Перший поєдинок</h2>
+        <p class="small" id="stVs">Суперник</p>
+        <p id="stText"></p>
+      </div>
+      <div class="row"><button class="btn" type="button" id="stMenu" data-i18n="btn.menu">Меню</button><button class="btn red" type="button" id="stGo" data-i18n="btn.fight">До бою</button></div>
+    </div>
+  </section>
+
+  <section id="qr" class="screen" hidden>
+    <div class="panel">
+      <h2 id="qrTitle">Бій за QR-кодом</h2>
+      <div class="qrbox"><canvas id="qrCanvas" width="232" height="232" aria-label="QR"></canvas></div>
+      <p class="code" id="qrCode">—</p>
+      <p class="small" id="qrText">Друг сканує QR камерою телефона й відкриває гру, а потім натискає «Ввести код» і вводить ці літери. Гра почнеться сама.</p>
+      <div class="row"><button class="btn" type="button" id="qrCopy" data-i18n="qr.copy">Копіювати запрошення</button><button class="btn" type="button" id="qrBack" data-i18n="btn.cancel">Скасувати</button></div>
+    </div>
+  </section>
+
+  <section id="codeIn" class="screen" hidden>
+    <div class="panel">
+      <h2 data-i18n="code.title">Код друга</h2>
+      <label class="small" for="codeField" data-i18n="code.label">Літери під QR-кодом на екрані друга</label>
+      <input id="codeField" type="text" maxlength="5" autocomplete="off" autocapitalize="characters" data-i18n-ph="code.ph" placeholder="K7MQ2" style="text-transform:uppercase;letter-spacing:0.3em;text-align:center;font-size:22px">
+      <div class="row"><button class="btn" type="button" id="codeBack" data-i18n="btn.back">Назад</button><button class="btn red" type="button" id="codeGo" data-i18n="btn.fight">До бою</button></div>
+    </div>
+  </section>
+
+  <section id="login" class="screen" hidden>
+    <div class="panel">
+      <h2 data-i18n="login.title">Вхід через email</h2>
+      <p class="small" data-i18n="login.text"></p>
+      <form id="loginForm1" class="lform">
+        <label class="small" for="loginEmail" data-i18n="login.email">Твій email</label>
+        <input id="loginEmail" type="email" autocomplete="email" inputmode="email" required>
+        <button class="btn red" type="submit" id="loginSend" data-i18n="login.send">Надіслати код</button>
+      </form>
+      <form id="loginForm2" class="lform" hidden>
+        <p class="small" id="loginSent"></p>
+        <label class="small" for="loginCode" data-i18n="login.code">Код із листа</label>
+        <input id="loginCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="letter-spacing:0.4em;text-align:center;font-size:22px">
+        <button class="btn red" type="submit" id="loginVerify" data-i18n="login.verify">Увійти</button>
+      </form>
+      <p class="small" id="loginMsg" role="status"></p>
+      <button class="btn" type="button" id="loginBack" data-i18n="btn.back">Назад</button>
+    </div>
+  </section>
+
+  <section id="pause" class="screen" hidden>
+    <div class="panel">
+      <h2 data-i18n="pause.title">Пауза</h2>
+      <button class="btn red" type="button" id="resume">Продовжити</button>
+      <button class="btn" type="button" id="quit" data-i18n="btn.quit">Вийти з бою</button>
+      <button class="btn" type="button" id="musicBtn">Музика</button>
+      <div class="langs inline" id="langs2"></div>
+      <button class="btn" type="button" id="soundBtn">Звук: увімкнено</button>
+      <button class="btn" type="button" id="qualBtn">Графіка: висока</button>
+      <p class="small" data-i18n="credits"></p>
+    </div>
+  </section>
+
+  <section id="result" class="screen" hidden>
+    <div class="panel">
+      <h2 id="resTitle">Перемога</h2>
+      <p id="resText"></p>
+      <div class="row"><button class="btn red" type="button" id="again">Ще бій</button><button class="btn" type="button" id="toMenu" data-i18n="btn.toMenu">У меню</button></div>
+    </div>
+  </section>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <div id="rotate" hidden>
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="M50 40a18 18 0 0 1-18 18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M28 54l4 4-4 4" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+    <b data-i18n="rotate.title">Поверни телефон горизонтально</b>
+    <span data-i18n="rotate.sub">Гра зроблена для альбомного екрана</span>
+    <button class="btn" type="button" id="rotateSkip" data-i18n="rotate.skip">Грати так</button>
+  </div>
+</div>
+
+<script>
+  window.__errs = [];
+  window.addEventListener('error', function (e) { var m = e.message || (e.target && (e.target.src || e.target.href) ? 'не завантажився ' + (e.target.src || e.target.href) : ''); if (m) window.__errs.push(m); }, true);
+  window.addEventListener('unhandledrejection', function (e) { window.__errs.push(String(e.reason && e.reason.message || e.reason)); });
+</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
