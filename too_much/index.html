@@ -1316,8 +1316,13 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
   const SC = 1 / 120; // ігрова одиниця → метри
   const app = $('app'), cv = $('cv');
   let VW = 1, VH = 1;
-  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || Math.min(window.screen.width, window.screen.height) < 600;
-  let quality = storage.get('duel3d.q', isMobile ? 1 : 2);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const isMobile = isIOS || /Android|Mobile/i.test(navigator.userAgent) || Math.min(window.screen.width, window.screen.height) < 600;
+  // якість: якщо гравець сам не обирав — підбираємо автоматично за швидкістю пристрою
+  const userQ = storage.get('duel3d.q', null);
+  let quality = userQ !== null ? userQ : isMobile ? 1 : 2;
+  let autoQ = userQ === null;
+  let dynScale = 1; // динамічна роздільність: знижується, коли кадри не встигають
   const Q_NAMES = ['низька', 'середня', 'висока', 'ультра'];
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, powerPreference: 'high-performance', stencil: false }); }
@@ -1326,11 +1331,12 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
   renderer.toneMappingExposure = 1;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // м’які тіні дорогі на телефонах — там звичайні PCF (тип не міняємо під час гри, щоб не перекомпілювати шейдери)
+  renderer.shadowMap.type = isMobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 600);
   camera.position.set(0, 1.4, 7);
-  const rtMain = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: isMobile ? 2 : 4 });
+  const rtMain = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: isMobile ? 0 : 4 });
   const composer = new EffectComposer(renderer, rtMain);
   composer.addPass(new RenderPass(scene, camera));
   // затінення в кутах і щілинах (GTAO) та глибина різкості — для високої й ультра якості
@@ -1341,10 +1347,10 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
   composer.addPass(gtao);
   const bokeh = new BokehPass(scene, camera, { focus: 6, aperture: 0.0016, maxblur: 0.006 });
   composer.addPass(bokeh);
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.55, 0.88);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.35, 0.38, 0.97);
   composer.addPass(bloom);
   const grade = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uGrain: { value: 0.03 }, uVig: { value: 0.42 }, uDark: { value: 0 }, uFlash: { value: 0 }, uAb: { value: 0 }, uSat: { value: 1.14 }, uSharp: { value: 0.3 }, uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, uTint: { value: new THREE.Color(1, 1, 1) } },
+    uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uGrain: { value: 0.03 }, uVig: { value: 0.3 }, uDark: { value: 0 }, uFlash: { value: 0 }, uAb: { value: 0 }, uSat: { value: 1.14 }, uSharp: { value: 0.3 }, uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, uTint: { value: new THREE.Color(1, 1, 1) } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime, uGrain, uVig, uDark, uFlash, uAb, uSat, uSharp; uniform vec2 uTexel; uniform vec3 uTint; varying vec2 vUv;
       void main(){
@@ -1371,18 +1377,25 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
   composer.addPass(new OutputPass());
   const pmrem = new THREE.PMREMGenerator(renderer);
 
-  function pixelRatio() { return Math.min(window.devicePixelRatio || 1, [0.85, 1.35, 2, 2.5][quality] || 1.35); }
+  function pixelRatio() {
+    const cap = isMobile ? [0.75, 1, 1.5, 2][quality] : [0.85, 1.35, 2, 2.5][quality];
+    return Math.max(0.5, Math.min(window.devicePixelRatio || 1, cap || 1) * dynScale);
+  }
   function applyQuality() {
     const pr = pixelRatio();
     renderer.setPixelRatio(pr); composer.setPixelRatio(pr);
     renderer.setSize(VW, VH, false); composer.setSize(VW, VH);
     bloom.enabled = quality > 0;
-    gtao.enabled = quality >= 2 && !/[?&]noao/.test(location.search);
-    bokeh.enabled = quality >= 2 && !/[?&]nodof/.test(location.search);
-    grade.uniforms.uSharp.value = quality >= 2 ? 0.32 : quality === 1 ? 0.18 : 0;
+    gtao.enabled = quality >= (isMobile ? 3 : 2) && !/[?&]noao/.test(location.search);
+    bokeh.enabled = quality >= (isMobile ? 3 : 2) && !/[?&]nodof/.test(location.search);
+    grade.uniforms.uSharp.value = quality >= 2 ? 0.28 : quality === 1 && !isMobile ? 0.16 : 0;
+    grade.uniforms.uGrain.value = quality === 0 ? 0 : 0.025;
+    // згладжування MSAA лише на високій якості (на телефонах це найдорожча частина кадру)
+    const ms = quality >= 2 ? (isMobile ? 2 : 4) : quality === 1 && !isMobile ? 2 : 0;
+    for (const rt of [composer.renderTarget1, composer.renderTarget2]) if (rt.samples !== ms) { rt.samples = ms; rt.dispose(); }
     grade.uniforms.uTexel.value.set(1 / (VW * pr), 1 / (VH * pr));
     renderer.shadowMap.enabled = true;
-    const sm = [1024, 1024, 2048, 4096][quality] || 1024; sun.shadow.mapSize.set(sm, sm); sun.shadow.radius = quality === 3 ? 5 : 3;
+    const sm = (isMobile ? [512, 1024, 1024, 2048] : [1024, 1024, 2048, 4096])[quality] || 1024; sun.shadow.mapSize.set(sm, sm); sun.shadow.radius = quality === 3 ? 5 : 3;
     if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
     PS.forEach(p => { p.mat.uniforms.uScale.value = VH * pr / (2 * Math.tan(camera.fov * D2R / 2)); });
     const qb = $('qualBtn'); if (qb) qb.textContent = t('quality', { q: t('q.' + quality) });
@@ -1512,13 +1525,13 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
       c = mix(c, uTop, smoothstep(0.18, 0.85, h));
       if (h < 0.0) c = mix(uHor, uBot, smoothstep(0.0, -0.12, h));
       float sd = max(dot(d, normalize(uSunDir)), 0.0);
-      c += uSunCol * (smoothstep(0.9993, 0.9997, sd) * uSun * 18.0 + pow(sd, 14.0) * 0.45 + pow(sd, 3.0) * 0.12);
+      c += uSunCol * (smoothstep(0.9993, 0.9997, sd) * uSun * 4.0 + pow(sd, 40.0) * 0.22 + pow(sd, 4.0) * 0.06);
       if (uStars > 0.0 && h > 0.0) { vec3 q = floor(d * 380.0); float s = h3(q); c += step(0.9975, s) * uStars * (0.6 + 0.4 * sin(uTime * 3.0 + s * 90.0)) * smoothstep(0.0, 0.25, h) * vec3(0.9, 0.95, 1.0) * 2.0; }
       vec2 uv = d.xz / max(0.06, h + 0.12);
       float n = fbm(uv * 0.55 + vec2(uTime * 0.006, uTime * 0.002));
       float n2v = fbm(uv * 1.6 - vec2(uTime * 0.01, 0.0));
       float cl = smoothstep(0.62 - uCover, 0.95 - uCover * 0.6, n * 0.75 + n2v * 0.35) * uCloud * smoothstep(-0.02, 0.12, h);
-      vec3 lit = mix(uCloudDark, uCloudCol, clamp(n2v * 1.3 - 0.2, 0.0, 1.0)) + uSunCol * pow(sd, 5.0) * 0.6;
+      vec3 lit = mix(uCloudDark, uCloudCol, clamp(n2v * 1.3 - 0.2, 0.0, 1.0)) + uSunCol * pow(sd, 5.0) * 0.35;
       c = mix(c, lit, cl);
       c += uFlash * vec3(0.7, 0.75, 0.95) * (0.4 + cl * 1.6);
       gl_FragColor = vec4(c, 1.0);
@@ -1735,7 +1748,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 
   function buildKurhan() {
     const A = { group: new THREE.Group(), fires: [], lights: [] };
-    A.sky = makeSky({ top: '#1d2c52', mid: '#a4543a', hor: '#ffad66', bot: '#3a2a20', sunDir: [-0.55, 0.05, -1], sunCol: [1.6, 0.85, 0.4], sun: 1, cloud: 0.85, cover: 0.05, cloudCol: '#ffb27a', cloudDark: '#5a3046' });
+    A.sky = makeSky({ top: '#1d2c52', mid: '#a4543a', hor: '#ffad66', bot: '#3a2a20', sunDir: [-0.55, 0.05, -1], sunCol: [1.2, 0.7, 0.38], sun: 1, cloud: 0.85, cover: 0.05, cloudCol: '#ffb27a', cloudDark: '#5a3046' });
     A.fog = new THREE.Fog(0xd08458, 22, 150);
     A.env = { exposure: 1.0, hemi: [0xffcf9e, 0x3a2a1c, 0.55], sun: [0xffb070, 3.2, [-14, 7, -22]], rim: [0xffa060, 2.2, [-6, 4, -10]], fill: [0x8aa0ff, 0.5, [3, 3, 10]], tint: [1.04, 0.98, 0.92], bloom: 0.55 };
     const groundT = naturalTex({ size: 256, seed: 7, c1: [0.36, 0.28, 0.16], c2: [0.55, 0.45, 0.24], bump: 5 });
@@ -1900,7 +1913,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
       A.water.offset.x += dt * 0.012; A.water.offset.y += dt * 0.02;
       A.storm -= dt;
       if (A.storm <= 0) { A.storm = rand(4, 10); A.flash = 1; if (game) sfx.thunderFar(); }
-      if (A.flash > 0) { A.flash = Math.max(0, A.flash - dt * 2.5); A.sky.material.uniforms.uFlash.value = A.flash * (0.6 + Math.random() * 0.4); hemi.intensity = A.env.hemi[2] + A.flash * 2.5; }
+      if (A.flash > 0) { A.flash = Math.max(0, A.flash - dt * 2.5); A.sky.material.uniforms.uFlash.value = A.flash * (0.6 + Math.random() * 0.4); hemi.intensity = hemiBase(A.env) + A.flash * 1.1; }
       else A.sky.material.uniforms.uFlash.value = 0;
     };
     return A;
@@ -2611,6 +2624,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
     m.position.set(x, y, z); m.rotation.set(Math.PI, ry || 0, 0); A.group.add(m);
   }
   function candleTick(A, dt) { if (A.candles) for (const c of A.candles) if (Math.random() < dt * 9) PA.emit(c[0], c[1], c[2], 0, 0.25, 0, 0.22, 0.08, 3, 1.4, 0.4, 0.9, { grow: -0.5, heat: 1 }); }
+  const hemiBase = E => E.hemi[2] * 1.45 + 0.15;
   function setArena(id) {
     if (arenaId === id) return;
     setMusic(id);
@@ -2620,13 +2634,14 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
     scene.add(arena.group, arena.sky);
     scene.fog = arena.fog;
     const E = arena.env;
-    renderer.toneMappingExposure = E.exposure;
-    hemi.color.set(E.hemi[0]); hemi.groundColor.set(E.hemi[1]); hemi.intensity = E.hemi[2];
-    sun.color.set(E.sun[0]); sun.intensity = E.sun[1]; sun.userData.off = new THREE.Vector3().fromArray(E.sun[2]);
-    rim.color.set(E.rim[0]); rim.intensity = E.rim[1]; rim.userData.off = new THREE.Vector3().fromArray(E.rim[2]);
-    fill.color.set(E.fill[0]); fill.intensity = E.fill[1]; fill.userData.off = new THREE.Vector3().fromArray(E.fill[2]);
-    grade.uniforms.uTint.value.fromArray(E.tint);
-    bloom.strength = E.bloom;
+    // більше розсіяного світла (бійців видно в темних аренах), м’якше «сонце», нейтральніший відтінок
+    renderer.toneMappingExposure = E.exposure * 1.05;
+    hemi.color.set(E.hemi[0]); hemi.groundColor.set(E.hemi[1]); hemi.intensity = hemiBase(E);
+    sun.color.set(E.sun[0]); sun.intensity = E.sun[1] * 0.8; sun.userData.off = new THREE.Vector3().fromArray(E.sun[2]);
+    rim.color.set(E.rim[0]); rim.intensity = E.rim[1] * 0.85; rim.userData.off = new THREE.Vector3().fromArray(E.rim[2]);
+    fill.color.set(E.fill[0]); fill.intensity = Math.max(0.6, E.fill[1] * 1.7); fill.userData.off = new THREE.Vector3().fromArray(E.fill[2]);
+    grade.uniforms.uTint.value.fromArray(E.tint.map(v => lerp(v, 1, 0.45)));
+    bloom.strength = E.bloom * 0.55;
     // карта оточення з неба арени
     if (!arena.envTex) {
       // відбиття знімаємо з самої арени (стіни, вікна, лампи) з висоти грудей бійця
@@ -2685,8 +2700,8 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
     if (F.fired < 2 && F.t > 1.5) { F.fired = 2; flash = 0.6; dust(F.f.x, 0, 30); }
     const desat = F.t < 0.25 ? F.t / 0.25 : F.t > F.dur - 0.5 ? Math.max(0, (F.dur - F.t) / 0.5) : 1;
     grade.uniforms.uSat.value = lerp(1.14, 0.3, desat);
-    grade.uniforms.uVig.value = lerp(0.42, 0.7, desat);
-    if (F.t >= F.dur) { cam.fin = null; slowK = 0.3; grade.uniforms.uSat.value = 1.14; grade.uniforms.uVig.value = 0.42; }
+    grade.uniforms.uVig.value = lerp(0.3, 0.65, desat);
+    if (F.t >= F.dur) { cam.fin = null; slowK = 0.3; grade.uniforms.uSat.value = 1.14; grade.uniforms.uVig.value = 0.3; }
   }
   const cam = { x: 0, w: 600, shake: 0, punch: 0, cut: null, cutK: 0 };
   const W = (x, y, z) => [x * SC, -y * SC, z || 0.18];
@@ -3110,6 +3125,25 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
   // =====================================================================
   // Кадр
   // =====================================================================
+  // Стеження за швидкістю: якщо кадри не встигають — знижуємо роздільність, далі якість; якщо запас — повертаємо
+  const perf = { t: performance.now(), n: 0, acc: 0, slow: 0, fast: 0, warm: 0 };
+  function perfTick() {
+    const now = performance.now(), dt = now - perf.t; perf.t = now;
+    if (dt > 1500 || document.hidden) return; // вкладка була неактивна
+    perf.acc += dt; perf.n++;
+    if (perf.acc < 1200) return;
+    const avg = perf.acc / perf.n; perf.acc = 0; perf.n = 0;
+    if (perf.warm < 2) { perf.warm++; return; } // перші секунди — компіляція шейдерів, не рахуємо
+    if (avg > 24) { perf.slow++; perf.fast = 0; } else if (avg < 17.5) { perf.fast++; perf.slow = 0; } else { perf.slow = 0; perf.fast = 0; }
+    if (perf.slow >= 1) {
+      perf.slow = 0;
+      if (dynScale > 0.62) { dynScale = Math.max(0.6, dynScale - 0.12); applyQuality(); }
+      else if (autoQ && quality > 0) { quality--; dynScale = 0.85; applyQuality(); }
+    } else if (perf.fast >= 4 && dynScale < 1) {
+      perf.fast = 0; dynScale = Math.min(1, dynScale + 0.08); applyQuality();
+    }
+    window.__perf = { avg: +avg.toFixed(1), dynScale: +dynScale.toFixed(2), quality };
+  }
   function renderWorld(rdt) {
     if (game) {
       syncView(game.me, rdt); syncView(game.opp, rdt);
@@ -3122,7 +3156,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
     placeLights();
     grade.uniforms.uDark.value = darken;
     grade.uniforms.uTime.value = clock % 100;
-    grade.uniforms.uFlash.value = flash * 0.16;
+    grade.uniforms.uFlash.value = flash * 0.06;
     grade.uniforms.uAb.value = reduceMotion ? 0 : aberr;
     // фокус камери на бійцях
     if (bokeh.enabled) {
@@ -3132,6 +3166,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
       bokeh.uniforms.aperture.value = (cam.fin ? 0.006 : cam.cutK > 0.3 ? 0.004 : 0.0016) * (VH > VW ? 0.6 : 1);
     }
     composer.render(rdt);
+    perfTick();
     window.__progs = renderer.info.programs ? renderer.info.programs.length : 0;
   }
   // Заставка: двоє бійців у цитаделі
@@ -3762,7 +3797,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
   }
   function leaveToTitle() {
     game = null; paused = false; ui.hud.hidden = true; ui.pad.hidden = true;
-    cam.cut = null; cam.fin = null; slowK = 0.3; grade.uniforms.uSat.value = 1.14; grade.uniforms.uVig.value = 0.42; darken = 0; slowmo = 0;
+    cam.cut = null; cam.fin = null; slowK = 0.3; grade.uniforms.uSat.value = 1.14; grade.uniforms.uVig.value = 0.3; darken = 0; slowmo = 0;
     setupTitle();
     campLabel(); $('again').textContent = t('btn.again');
     screen('title');
@@ -4163,7 +4198,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
   langHooks.push(() => { for (const m of langMenus) m.render(); }, () => fsLabel());
   langHooks.push(soundLabel, () => applyQuality(), () => campLabel(), () => { if (!ui.select.hidden) { renderRoster(); renderPicks(); } }, () => { if (typeof musicLabel === 'function') musicLabel(); }, () => { if (typeof acctRender === 'function') acctRender(); });
   applyLang();
-  $('qualBtn').addEventListener('click', () => { quality = (quality + 3) % 4; storage.set('duel3d.q', quality); applyQuality(); });
+  $('qualBtn').addEventListener('click', () => { quality = (quality + 3) % 4; autoQ = false; dynScale = 1; storage.set('duel3d.q', quality); applyQuality(); });
   $('again').addEventListener('click', () => {
     if (game && game.camp !== undefined) {
       const sv = campSave(); game = null; ui.hud.hidden = true; $('again').textContent = t('btn.again');

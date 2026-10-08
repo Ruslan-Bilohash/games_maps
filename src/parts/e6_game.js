@@ -101,7 +101,7 @@
   }
   function leaveToTitle() {
     game = null; paused = false; ui.hud.hidden = true; ui.pad.hidden = true;
-    cam.cut = null; cam.fin = null; slowK = 0.3; grade.uniforms.uSat.value = 1.14; grade.uniforms.uVig.value = 0.42; darken = 0; slowmo = 0;
+    cam.cut = null; cam.fin = null; slowK = 0.3; grade.uniforms.uSat.value = 1.14; grade.uniforms.uVig.value = 0.3; darken = 0; slowmo = 0;
     setupTitle();
     campLabel(); $('again').textContent = t('btn.again');
     screen('title');
@@ -502,7 +502,7 @@
   langHooks.push(() => { for (const m of langMenus) m.render(); }, () => fsLabel());
   langHooks.push(soundLabel, () => applyQuality(), () => campLabel(), () => { if (!ui.select.hidden) { renderRoster(); renderPicks(); } }, () => { if (typeof musicLabel === 'function') musicLabel(); }, () => { if (typeof acctRender === 'function') acctRender(); });
   applyLang();
-  $('qualBtn').addEventListener('click', () => { quality = (quality + 3) % 4; storage.set('duel3d.q', quality); applyQuality(); });
+  $('qualBtn').addEventListener('click', () => { quality = (quality + 3) % 4; autoQ = false; dynScale = 1; storage.set('duel3d.q', quality); applyQuality(); });
   $('again').addEventListener('click', () => {
     if (game && game.camp !== undefined) {
       const sv = campSave(); game = null; ui.hud.hidden = true; $('again').textContent = t('btn.again');
