@@ -1,0 +1,15 @@
+{
+  "name": "Двобій 3D",
+  "short_name": "Двобій 3D",
+  "description": "Файтинг у браузері: кампанія, 7 бійців, 7 арен.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#07080b",
+  "theme_color": "#07080b",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

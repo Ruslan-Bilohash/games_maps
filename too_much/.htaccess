@@ -5,6 +5,8 @@ DirectoryIndex index.html
 <IfModule mod_mime.c>
   AddType application/json .json
   AddType model/gltf-binary .glb
+  AddType application/manifest+json .webmanifest
+  AddType image/svg+xml .svg
   AddType text/javascript .js .mjs
   AddCharset utf-8 .html .js .json .css .md
 </IfModule>

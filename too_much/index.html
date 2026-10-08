@@ -2,7 +2,9 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
 <meta name="theme-color" content="#07080b">
 <meta name="description" content="Двобій 3D — файтинг у браузері: кампанія, 7 бійців, 7 арен, комбо й супер-удари.">
 <meta property="og:title" content="Двобій 3D">
@@ -12,6 +14,8 @@
 </head>
 <body>
 <title>Двобій 3D · Duel 3D</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#07080b">
@@ -35,7 +39,7 @@
   color-scheme: dark;
 }
 [hidden] { display: none !important; }
-html, body { height: 100%; }
+html, body { height: 100%; height: 100dvh; width: 100%; position: fixed; inset: 0; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui);
   overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
@@ -48,7 +52,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 
 /* ---------- HUD ---------- */
 #hud { position: absolute; inset: 0; pointer-events: none; }
-.bars { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: start; }
+.bars { position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: start; }
 .side { display: grid; gap: 5px; }
 .side.r { justify-items: end; }
 .hp { width: 100%; height: 16px; position: relative; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.55); transform: skewX(-20deg); box-shadow: 0 0 18px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.6); overflow: hidden; }
@@ -58,6 +62,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .hp .trail { background: #ff5a3c; }
 .hp .fill { background: linear-gradient(to bottom, #fff3b0, #ffc23d 45%, #e08a0b); box-shadow: 0 0 12px rgba(255,194,61,0.7); }
 .hp.low .fill { background: linear-gradient(to bottom, #ffb1a6, #e0322a 50%, #8f1610); box-shadow: 0 0 12px rgba(224,50,42,0.8); }
+.hp .hpn { position: absolute; top: 50%; transform: translateY(-50%) skewX(20deg); left: 8px; z-index: 2; font: 700 11px/1 var(--cond); letter-spacing: 0.04em; color: #1a1006; text-shadow: 0 0 3px rgba(255,255,255,0.6); pointer-events: none; font-variant-numeric: tabular-nums; }
+.side.r .hp .hpn { left: auto; right: 8px; transform: translateY(-50%) skewX(-20deg); }
+.hp.low .hpn { color: #fff; text-shadow: 0 1px 3px #000; }
+.hp .fill, .hp .trail { transition: width 0.12s linear; }
 .name { font-family: var(--cond); font-weight: 700; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; text-shadow: 0 2px 6px #000; display: flex; gap: 8px; align-items: center; max-width: 100%; }
 .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wins { display: flex; gap: 5px; }
@@ -65,6 +73,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .wins b.on { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 10px var(--gold); }
 .timer { font-family: var(--display); font-size: 34px; line-height: 1; min-width: 2ch; text-align: center; color: #fff; text-shadow: 0 0 14px rgba(255,194,61,0.7), 0 3px 6px #000; font-variant-numeric: tabular-nums; }
 .mode { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 50px); left: 50%; transform: translateX(-50%); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.6); white-space: nowrap; text-shadow: 0 1px 4px #000; }
+/* телефон горизонтально: компактна верхня панель, щоб не закривати бійців */
+@media (max-height: 460px) {
+  .bars { gap: 8px; top: max(6px, env(safe-area-inset-top)); }
+  .hp { height: 14px; }
+  .timer { font-size: 26px; }
+  .name { font-size: 12px; }
+  .wins b { width: 7px; height: 7px; }
+  .mode { top: calc(max(6px, env(safe-area-inset-top)) + 38px); font-size: 9px; }
+}
+/* телефон вертикально: великі смуги здоров’я на всю ширину */
+@media (orientation: portrait) and (max-width: 700px) {
+  .bars { grid-template-columns: 1fr auto 1fr; gap: 6px; left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); }
+  .hp { height: 20px; transform: skewX(-12deg); }
+  .side.r .hp { transform: skewX(12deg); }
+  .hp .hpn { font-size: 13px; }
+  .timer { font-size: 28px; padding-top: 2px; }
+  .name { font-size: 12px; gap: 5px; }
+  .mode { top: calc(max(10px, env(safe-area-inset-top)) + 46px); font-size: 9px; }
+}
 
 /* ---------- Керування ---------- */
 #pad { position: absolute; inset: 0; pointer-events: none; }
@@ -167,7 +194,6 @@ label.small { display: block; text-align: left; font-size: 12px; color: var(--mu
 @keyframes spin { to { transform: rotate(360deg); } }
 .moves { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; text-align: left; }
 .moves b { color: var(--gold); font-family: var(--cond); letter-spacing: 0.04em; }
-}
 #rotate { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; align-content: center; gap: 12px; padding: 24px; text-align: center; background: rgba(7,8,11,0.94); }
 #rotate svg { width: 84px; height: 84px; color: var(--gold); animation: rot 2s ease-in-out infinite; }
 @keyframes rot { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
@@ -233,12 +259,12 @@ input[type="email"] { width: 100%; box-sizing: border-box; padding: 11px 12px; b
   <div id="hud" hidden>
     <div class="bars">
       <div class="side l">
-        <div class="hp" id="hpL"><i class="trail" id="trL"></i><i class="fill" id="fiL"></i></div>
+        <div class="hp" id="hpL"><i class="trail" id="trL"></i><i class="fill" id="fiL"></i><b class="hpn" id="hnL">100</b></div>
         <div class="name"><span id="nmL"></span><div class="wins" id="wL"><b></b><b></b></div></div>
       </div>
       <div class="timer" id="timer">60</div>
       <div class="side r">
-        <div class="hp" id="hpR"><i class="trail" id="trR"></i><i class="fill" id="fiR"></i></div>
+        <div class="hp" id="hpR"><i class="trail" id="trR"></i><i class="fill" id="fiR"></i><b class="hpn" id="hnR">100</b></div>
         <div class="name"><div class="wins" id="wR"><b></b><b></b></div><span id="nmR"></span></div>
       </div>
     </div>
@@ -367,6 +393,7 @@ input[type="email"] { width: 100%; box-sizing: border-box; padding: 11px 12px; b
       <button class="btn" type="button" id="musicBtn">Музика</button>
       <div class="langs inline" id="langs2"></div>
       <button class="btn" type="button" id="soundBtn">Звук: увімкнено</button>
+      <button class="btn" type="button" id="fsBtn">На весь екран</button>
       <button class="btn" type="button" id="qualBtn">Графіка: висока</button>
       <p class="small" data-i18n="credits"></p>
     </div>
@@ -697,7 +724,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
       'qr.title': 'Бій за QR-кодом', 'qr.show': 'Покажи код другові', 'qr.text': 'Друг сканує QR камерою телефона, відкриває гру, натискає «Ввести код» і вводить ці літери. Бій почнеться сам.',
       'qr.textNo': 'Бій за кодом працює, коли гра відкрита на claude.ai і ти увійшов в акаунт.', 'qr.copy': 'Копіювати запрошення', 'qr.copied': 'Запрошення скопійовано', 'qr.invite': 'Бій у «Двобій 3D»! Відкрий {url}, натисни «Ввести код» і введи {code}', 'qr.unavail': 'QR недоступний',
       'code.title': 'Код друга', 'code.label': 'Літери під QR-кодом на екрані друга', 'code.ph': 'Наприклад, K7MQ2', 'code.len': 'Код має 5 символів', 'code.friend': 'Є код друга — обери бійця й тисни «До бою»',
-      'lang.label': 'Мова', 'pause.title': 'Пауза', 'btn.resume': 'Продовжити', 'btn.resumeOnline': 'Повернутися до бою', 'btn.quit': 'Вийти з бою', 'sound.on': 'Звук: увімкнено', 'sound.off': 'Звук: вимкнено', 'music.on': 'Музика: увімкнено', 'music.off': 'Музика: вимкнено',
+      'lang.label': 'Мова', 'fs.on': 'На весь екран', 'fs.off': 'Вийти з повного екрана', 'pause.title': 'Пауза', 'btn.resume': 'Продовжити', 'btn.resumeOnline': 'Повернутися до бою', 'btn.quit': 'Вийти з бою', 'sound.on': 'Звук: увімкнено', 'sound.off': 'Звук: вимкнено', 'music.on': 'Музика: увімкнено', 'music.off': 'Музика: вимкнено',
       'quality': 'Графіка: {q}', 'q.0': 'низька', 'q.1': 'середня', 'q.2': 'висока', 'q.3': 'ультра', 'lang': 'Мова',
       'credits': '3D-скан голови: Lee Perry-Smith, Infinite-Realities (CC BY 3.0). Персонажі: Adobe Mixamo. Рушій: three.js (MIT).',
       'res.win': 'Перемога', 'res.lose': 'Поразка', 'res.winner': 'Переміг {name}', 'res.winText': 'Ти здолав бійця «{name}» з рахунком {a}:{b}.', 'res.loseText': '«{name}» виявився сильнішим: {a}:{b}. Спробуй іншу тактику.',
@@ -735,7 +762,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
       'qr.title': 'Fight via QR code', 'qr.show': 'Show this code to a friend', 'qr.text': 'Your friend scans the QR code with a phone camera, opens the game, taps “Enter code” and types these letters. The fight starts by itself.',
       'qr.textNo': 'Code fights work when the game is open on claude.ai and you are signed in.', 'qr.copy': 'Copy invitation', 'qr.copied': 'Invitation copied', 'qr.invite': 'Fight me in Duel 3D! Open {url}, tap “Enter code” and type {code}', 'qr.unavail': 'QR unavailable',
       'code.title': 'Friend’s code', 'code.label': 'Letters under the QR code on your friend’s screen', 'code.ph': 'For example, K7MQ2', 'code.len': 'The code has 5 characters', 'code.friend': 'You have a friend’s code — pick a fighter and press “Fight!”',
-      'lang.label': 'Language', 'pause.title': 'Pause', 'btn.resume': 'Continue', 'btn.resumeOnline': 'Back to the fight', 'btn.quit': 'Leave fight', 'sound.on': 'Sound: on', 'sound.off': 'Sound: off', 'music.on': 'Music: on', 'music.off': 'Music: off',
+      'lang.label': 'Language', 'fs.on': 'Full screen', 'fs.off': 'Exit full screen', 'pause.title': 'Pause', 'btn.resume': 'Continue', 'btn.resumeOnline': 'Back to the fight', 'btn.quit': 'Leave fight', 'sound.on': 'Sound: on', 'sound.off': 'Sound: off', 'music.on': 'Music: on', 'music.off': 'Music: off',
       'quality': 'Graphics: {q}', 'q.0': 'low', 'q.1': 'medium', 'q.2': 'high', 'q.3': 'ultra', 'lang': 'Language',
       'credits': 'Head scan: Lee Perry-Smith, Infinite-Realities (CC BY 3.0). Characters: Adobe Mixamo. Engine: three.js (MIT).',
       'res.win': 'Victory', 'res.lose': 'Defeat', 'res.winner': '{name} wins', 'res.winText': 'You beat “{name}” {a}:{b}.', 'res.loseText': '“{name}” was stronger: {a}:{b}. Try another tactic.',
@@ -773,7 +800,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
       'qr.title': 'Kamp med QR-kode', 'qr.show': 'Vis koden til en venn', 'qr.text': 'Vennen skanner QR-koden med mobilkameraet, åpner spillet, trykker «Skriv inn kode» og skriver disse bokstavene. Kampen starter av seg selv.',
       'qr.textNo': 'Kamp med kode fungerer når spillet er åpent på claude.ai og du er logget inn.', 'qr.copy': 'Kopier invitasjon', 'qr.copied': 'Invitasjonen er kopiert', 'qr.invite': 'Kjemp mot meg i Duell 3D! Åpne {url}, trykk «Skriv inn kode» og skriv {code}', 'qr.unavail': 'QR er ikke tilgjengelig',
       'code.title': 'Vennens kode', 'code.label': 'Bokstavene under QR-koden på vennens skjerm', 'code.ph': 'For eksempel K7MQ2', 'code.len': 'Koden har 5 tegn', 'code.friend': 'Du har en kode fra en venn — velg kjemper og trykk «Til kamp»',
-      'lang.label': 'Språk', 'pause.title': 'Pause', 'btn.resume': 'Fortsett', 'btn.resumeOnline': 'Tilbake til kampen', 'btn.quit': 'Forlat kampen', 'sound.on': 'Lyd: på', 'sound.off': 'Lyd: av', 'music.on': 'Musikk: på', 'music.off': 'Musikk: av',
+      'lang.label': 'Språk', 'fs.on': 'Fullskjerm', 'fs.off': 'Avslutt fullskjerm', 'pause.title': 'Pause', 'btn.resume': 'Fortsett', 'btn.resumeOnline': 'Tilbake til kampen', 'btn.quit': 'Forlat kampen', 'sound.on': 'Lyd: på', 'sound.off': 'Lyd: av', 'music.on': 'Musikk: på', 'music.off': 'Musikk: av',
       'quality': 'Grafikk: {q}', 'q.0': 'lav', 'q.1': 'middels', 'q.2': 'høy', 'q.3': 'ultra', 'lang': 'Språk',
       'credits': 'Hodeskanning: Lee Perry-Smith, Infinite-Realities (CC BY 3.0). Figurer: Adobe Mixamo. Motor: three.js (MIT).',
       'res.win': 'Seier', 'res.lose': 'Tap', 'res.winner': '{name} vinner', 'res.winText': 'Du slo «{name}» {a}:{b}.', 'res.loseText': '«{name}» var sterkere: {a}:{b}. Prøv en annen taktikk.',
@@ -3666,7 +3693,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
     attachView(me, 0); attachView(opp, 1);
     precompileScene();
     game = { mode, me, opp, round: 1, timer: ROUND_TIME, phase: 'intro', phaseT: 0, side };
-    fx = []; cam.x = 0; cam.w = 700; cam.cut = null; cam.cutK = 0; cam.fin = null; slowK = 0.3; hitStop = 0; slowmo = 0; darken = 0;
+    fx = []; cam.x = 0; cam.w = VH > VW * 1.2 ? 670 : 860; cam.cut = null; cam.cutK = 0; cam.fin = null; slowK = 0.3; hitStop = 0; slowmo = 0; darken = 0;
     screen(null); ui.hud.hidden = false; ui.pad.hidden = false; paused = false;
     // без сенсорного екрана (ПК, Steam) кнопки на екрані не потрібні — лишаємо тільки паузу
     $('stickZone').hidden = $('acts').hidden = !coarse() && !/[?&]pad/.test(location.search);
@@ -3912,13 +3939,15 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
     if (cam.punch > 0) cam.punch = Math.max(0, cam.punch - rdt * 0.4);
     // камера
     const mid = (me.x + opp.x) / 2, gap = Math.abs(me.x - opp.x);
+    // стабільна камера: не наїжджає впритул, коли бійці зближуються, і плавно відходить, коли розходяться
     const portrait = VH > VW * 1.2;
-    const minW = portrait ? 240 : Math.min(600, Math.max(420, VW * 0.6));
-    const tw = clamp(gap + (portrait ? 200 : 400), minW, portrait ? 860 : 1000);
-    const k = 1 - Math.exp(-rdt * 4);
+    const minW = portrait ? 480 : 800;
+    const air = Math.max(0, -Math.min(me.y, opp.y));
+    const tw = clamp(gap + (portrait ? 230 : 380) + air * (portrait ? 0.9 : 1.6), minW, portrait ? 820 : 1000);
+    const k = 1 - Math.exp(-rdt * (tw > cam.w ? 3 : 1.2));
     cam.w = lerp(cam.w, tw, k);
     const half = cam.w / 2;
-    cam.x = lerp(cam.x, clamp(mid, -ARENA / 2 + half - 160, ARENA / 2 - half + 160), k);
+    cam.x = lerp(cam.x, clamp(mid, -ARENA / 2 + half - 160, ARENA / 2 - half + 160), 1 - Math.exp(-rdt * 4));
     updateHud();
   }
   function updateHud() {
@@ -3929,6 +3958,8 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
       $(bar).classList.toggle('low', f.hp / f.maxHp < 0.3);
     };
     set(me, 'fiL', 'trL', 'hpL'); set(opp, 'fiR', 'trR', 'hpR');
+    const num = (f, id) => { const v = String(Math.max(0, Math.ceil(f.hp / f.maxHp * 100))); const el = $(id); if (el.textContent !== v) el.textContent = v; };
+    num(me, 'hnL'); num(opp, 'hnR');
     const wins = (id, n) => $(id).querySelectorAll('b').forEach((b, i) => b.classList.toggle('on', i < n));
     wins('wL', me.wins); wins('wR', opp.wins);
     const t = Math.ceil(game.timer); if ($('timer').textContent !== String(t)) $('timer').textContent = t;
@@ -4048,15 +4079,35 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
   $('rotateSkip').addEventListener('click', () => { rotateSkipped = true; checkRotate(); });
   window.addEventListener('resize', checkRotate);
   window.addEventListener('orientationchange', () => setTimeout(checkRotate, 200));
-  function goLandscape() {
-    if (!coarse()) return;
+  // ---------- Повний екран ----------
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const fsAble = () => { const el = document.documentElement; return !!(el.requestFullscreen || el.webkitRequestFullscreen); };
+  function enterFs() {
+    if (fsEl() || !fsAble() || window.duelDesktop) return;
     try {
       const el = document.documentElement;
-      const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
-      const lock = () => { const o = window.screen && window.screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}); };
-      if (p && p.then) p.then(lock).catch(lock); else lock();
+      const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen();
+      const lock = () => { const o = window.screen && window.screen.orientation; if (o && o.lock && coarse()) o.lock('landscape').catch(() => {}); };
+      if (p && p.then) p.then(lock).catch(() => {}); else lock();
     } catch (e) { /* браузер не дозволив */ }
   }
+  function exitFs() { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) { /* ігноруємо */ } }
+  function goLandscape() { if (coarse()) enterFs(); }
+  // на телефоні — повний екран із першого дотику і знову, якщо гравець випадково вийшов під час бою
+  document.addEventListener('pointerdown', e => {
+    if (!coarse() || fsEl()) return;
+    if (e.target.closest && e.target.closest('input, .lsel-menu, #rotate')) return;
+    enterFs();
+  }, { passive: true });
+  function fsLabel() { $('fsBtn').hidden = !fsAble() || !!window.duelDesktop; $('fsBtn').textContent = fsEl() ? t('fs.off') : t('fs.on'); }
+  $('fsBtn').addEventListener('click', () => { if (fsEl()) exitFs(); else enterFs(); });
+  document.addEventListener('fullscreenchange', () => { fsLabel(); setTimeout(resize, 120); });
+  document.addEventListener('webkitfullscreenchange', () => { fsLabel(); setTimeout(resize, 120); });
+  // без випадкового масштабування сторінки: щипок, жести Safari, Ctrl+коліщатко (подвійний дотик вимикає touch-action у CSS)
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1 || (e.scale !== undefined && e.scale !== 1)) e.preventDefault(); }, { passive: false });
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+  window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', e => e.preventDefault());
   $('selGo').addEventListener('click', () => {
     audioInit(); goLandscape();
     if (pendingMode === 'online') goOnline();
@@ -4109,7 +4160,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
     langMenus.push({ box, open, render: () => { box.querySelector('.lsel-cur').outerHTML = `<span class="lsel-cur" style="display:inline-flex;align-items:center;gap:8px">${FLAGS[lang]}<span>${LANGS[lang]}</span></span>`; btn.setAttribute('aria-label', t('lang.label') + ': ' + LANGS[lang]); } });
   }
   document.addEventListener('click', () => { for (const m of langMenus) m.open(false); });
-  langHooks.push(() => { for (const m of langMenus) m.render(); });
+  langHooks.push(() => { for (const m of langMenus) m.render(); }, () => fsLabel());
   langHooks.push(soundLabel, () => applyQuality(), () => campLabel(), () => { if (!ui.select.hidden) { renderRoster(); renderPicks(); } }, () => { if (typeof musicLabel === 'function') musicLabel(); }, () => { if (typeof acctRender === 'function') acctRender(); });
   applyLang();
   $('qualBtn').addEventListener('click', () => { quality = (quality + 3) % 4; storage.set('duel3d.q', quality); applyQuality(); });

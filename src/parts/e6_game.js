@@ -32,7 +32,7 @@
     attachView(me, 0); attachView(opp, 1);
     precompileScene();
     game = { mode, me, opp, round: 1, timer: ROUND_TIME, phase: 'intro', phaseT: 0, side };
-    fx = []; cam.x = 0; cam.w = 700; cam.cut = null; cam.cutK = 0; cam.fin = null; slowK = 0.3; hitStop = 0; slowmo = 0; darken = 0;
+    fx = []; cam.x = 0; cam.w = VH > VW * 1.2 ? 670 : 860; cam.cut = null; cam.cutK = 0; cam.fin = null; slowK = 0.3; hitStop = 0; slowmo = 0; darken = 0;
     screen(null); ui.hud.hidden = false; ui.pad.hidden = false; paused = false;
     // без сенсорного екрана (ПК, Steam) кнопки на екрані не потрібні — лишаємо тільки паузу
     $('stickZone').hidden = $('acts').hidden = !coarse() && !/[?&]pad/.test(location.search);
@@ -278,13 +278,15 @@
     if (cam.punch > 0) cam.punch = Math.max(0, cam.punch - rdt * 0.4);
     // камера
     const mid = (me.x + opp.x) / 2, gap = Math.abs(me.x - opp.x);
+    // стабільна камера: не наїжджає впритул, коли бійці зближуються, і плавно відходить, коли розходяться
     const portrait = VH > VW * 1.2;
-    const minW = portrait ? 240 : Math.min(600, Math.max(420, VW * 0.6));
-    const tw = clamp(gap + (portrait ? 200 : 400), minW, portrait ? 860 : 1000);
-    const k = 1 - Math.exp(-rdt * 4);
+    const minW = portrait ? 480 : 800;
+    const air = Math.max(0, -Math.min(me.y, opp.y));
+    const tw = clamp(gap + (portrait ? 230 : 380) + air * (portrait ? 0.9 : 1.6), minW, portrait ? 820 : 1000);
+    const k = 1 - Math.exp(-rdt * (tw > cam.w ? 3 : 1.2));
     cam.w = lerp(cam.w, tw, k);
     const half = cam.w / 2;
-    cam.x = lerp(cam.x, clamp(mid, -ARENA / 2 + half - 160, ARENA / 2 - half + 160), k);
+    cam.x = lerp(cam.x, clamp(mid, -ARENA / 2 + half - 160, ARENA / 2 - half + 160), 1 - Math.exp(-rdt * 4));
     updateHud();
   }
   function updateHud() {
@@ -295,6 +297,8 @@
       $(bar).classList.toggle('low', f.hp / f.maxHp < 0.3);
     };
     set(me, 'fiL', 'trL', 'hpL'); set(opp, 'fiR', 'trR', 'hpR');
+    const num = (f, id) => { const v = String(Math.max(0, Math.ceil(f.hp / f.maxHp * 100))); const el = $(id); if (el.textContent !== v) el.textContent = v; };
+    num(me, 'hnL'); num(opp, 'hnR');
     const wins = (id, n) => $(id).querySelectorAll('b').forEach((b, i) => b.classList.toggle('on', i < n));
     wins('wL', me.wins); wins('wR', opp.wins);
     const t = Math.ceil(game.timer); if ($('timer').textContent !== String(t)) $('timer').textContent = t;
@@ -414,15 +418,35 @@
   $('rotateSkip').addEventListener('click', () => { rotateSkipped = true; checkRotate(); });
   window.addEventListener('resize', checkRotate);
   window.addEventListener('orientationchange', () => setTimeout(checkRotate, 200));
-  function goLandscape() {
-    if (!coarse()) return;
+  // ---------- Повний екран ----------
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const fsAble = () => { const el = document.documentElement; return !!(el.requestFullscreen || el.webkitRequestFullscreen); };
+  function enterFs() {
+    if (fsEl() || !fsAble() || window.duelDesktop) return;
     try {
       const el = document.documentElement;
-      const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
-      const lock = () => { const o = window.screen && window.screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}); };
-      if (p && p.then) p.then(lock).catch(lock); else lock();
+      const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen();
+      const lock = () => { const o = window.screen && window.screen.orientation; if (o && o.lock && coarse()) o.lock('landscape').catch(() => {}); };
+      if (p && p.then) p.then(lock).catch(() => {}); else lock();
     } catch (e) { /* браузер не дозволив */ }
   }
+  function exitFs() { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) { /* ігноруємо */ } }
+  function goLandscape() { if (coarse()) enterFs(); }
+  // на телефоні — повний екран із першого дотику і знову, якщо гравець випадково вийшов під час бою
+  document.addEventListener('pointerdown', e => {
+    if (!coarse() || fsEl()) return;
+    if (e.target.closest && e.target.closest('input, .lsel-menu, #rotate')) return;
+    enterFs();
+  }, { passive: true });
+  function fsLabel() { $('fsBtn').hidden = !fsAble() || !!window.duelDesktop; $('fsBtn').textContent = fsEl() ? t('fs.off') : t('fs.on'); }
+  $('fsBtn').addEventListener('click', () => { if (fsEl()) exitFs(); else enterFs(); });
+  document.addEventListener('fullscreenchange', () => { fsLabel(); setTimeout(resize, 120); });
+  document.addEventListener('webkitfullscreenchange', () => { fsLabel(); setTimeout(resize, 120); });
+  // без випадкового масштабування сторінки: щипок, жести Safari, Ctrl+коліщатко (подвійний дотик вимикає touch-action у CSS)
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1 || (e.scale !== undefined && e.scale !== 1)) e.preventDefault(); }, { passive: false });
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+  window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', e => e.preventDefault());
   $('selGo').addEventListener('click', () => {
     audioInit(); goLandscape();
     if (pendingMode === 'online') goOnline();
@@ -475,7 +499,7 @@
     langMenus.push({ box, open, render: () => { box.querySelector('.lsel-cur').outerHTML = `<span class="lsel-cur" style="display:inline-flex;align-items:center;gap:8px">${FLAGS[lang]}<span>${LANGS[lang]}</span></span>`; btn.setAttribute('aria-label', t('lang.label') + ': ' + LANGS[lang]); } });
   }
   document.addEventListener('click', () => { for (const m of langMenus) m.open(false); });
-  langHooks.push(() => { for (const m of langMenus) m.render(); });
+  langHooks.push(() => { for (const m of langMenus) m.render(); }, () => fsLabel());
   langHooks.push(soundLabel, () => applyQuality(), () => campLabel(), () => { if (!ui.select.hidden) { renderRoster(); renderPicks(); } }, () => { if (typeof musicLabel === 'function') musicLabel(); }, () => { if (typeof acctRender === 'function') acctRender(); });
   applyLang();
   $('qualBtn').addEventListener('click', () => { quality = (quality + 3) % 4; storage.set('duel3d.q', quality); applyQuality(); });
